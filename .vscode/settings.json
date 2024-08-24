@@ -1,0 +1,26 @@
+{
+    "go.lintTool": "golangci-lint",
+    "go.lintFlags": [
+        "--fast",
+        "--fix"
+    ],
+    "editor.formatOnSave": true,
+    "task": {
+        "path": "go-task"
+    },
+    "files.autoSave": "afterDelay",
+    "git.autofetch": true,
+    "go.diagnostic.vulncheck": "Imports",
+    "go.coverOnSingleTest": false,
+    "go.coverOnSave": false,
+    "go.coverOnSingleTestFile": false,
+    "go.coverShowCounts": false,
+    "go.coverMode": "default",
+    "go.formatTool": "custom",
+    "go.alternateTools": {
+        "customFormatter": ""
+    },
+    "go.vetOnSave": "off",
+    "go.coverageOptions": "showUncoveredCodeOnly",
+    "go.coverOnTestPackage": false
+}
