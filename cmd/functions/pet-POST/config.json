@@ -1,0 +1,6 @@
+{
+    "memory": 128,
+    "timeout": 5,
+    "log_level": "trace",
+    "dashboard": false
+}

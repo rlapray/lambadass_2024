@@ -1,0 +1,452 @@
+# Taskfile.yml for Backend Project
+# This file manages the installation of necessary packages and runs the application.
+
+version: '3'
+
+dotenv: ['.env', '.local.env']
+
+env:
+
+  # Style
+  COLOR_BLUE: echo -e "\033[1;34m"
+  COLOR_RESET: echo -e -n "\033[0m"
+
+  # Build
+  BINARY_NAME: bootstrap
+  GO: go
+  GOARCH_AWS: arm64
+  GOARGS: -v # Will not use -ldflags="-s -w" for keeping debug info (lines, functions, etc...) if the binary is panicking
+
+  # Install
+  INSTALL: yay -S --needed
+  QUERY: yay -Q
+  SAM_PKG: aws-sam-cli-bin
+  DOCKER_PKG: docker
+  TERRAFORM_PKG: terraform
+  GO_PKG: go
+  ZIP_PKG: zip
+  LINTER_PKG: golangci-lint-bin
+  PKGS: "{{.SAM_PKG}} {{.DOCKER_PKG}} {{.TERRAFORM_PKG}} {{.GO_PKG}} {{.ZIP_PKG}} {{.LINTER_PKG}}"
+
+  # Run
+  # LAMBDA_PORT: 3001
+  # LAMBDA_NO_INFRA: true
+  # LAMBDA_RUN_EAGER: false
+
+  # POSTGRESQL
+  POSTGRES_VERSION: 16.2
+
+  #Benchmarks
+  BENCHMARKS_COUNT: 20
+
+tasks:
+
+  #############################################################################
+  ##### Local setup
+  #############################################################################
+
+  # Enables multi-architecture support using QEMU.
+  enable_multiarch:
+    internal: true
+    cmds:
+      - grep -q 'enabled' /proc/sys/fs/binfmt_misc/qemu-aarch64 || docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+
+  # Check installed packages and install missing ones.
+  install:
+    silent: false
+    cmds:
+      - cmd: "{{.COLOR_BLUE}}"
+        silent: true
+      - cmd: echo "┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓"
+        silent: true
+      - cmd: echo "┃                                        ┃"
+        silent: true
+      - cmd: echo "┃ Install                                ┃"
+        silent: true
+      - cmd: echo "┃                                        ┃"
+        silent: true
+      - cmd: echo "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛"
+        silent: true
+      - cmd: "{{.COLOR_RESET}}"
+        silent: true
+      - "{{.QUERY}} {{.PKGS}} > /dev/null || {{.INSTALL}} {{.PKGS}}"
+
+  #############################################################################
+  ##### Run
+  #############################################################################
+
+  # Runs the application locally
+  run:
+    deps: [build]
+    dir: terraform
+    ignore_error: true
+    cmds:
+      - task: generate-lambdas-terraform
+      - task: zip
+      - task: sql-start
+      - cmd: "{{.COLOR_BLUE}}"
+        silent: true
+      - cmd: echo "┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓"
+        silent: true
+      - cmd: echo "┃                                        ┃"
+        silent: true
+      - cmd: echo "┃ Run                                    ┃"
+        silent: true
+      - cmd: echo "┃                                        ┃"
+        silent: true
+      - cmd: echo "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛"
+        silent: true
+      - cmd: "{{.COLOR_RESET}}"
+        silent: true
+      - TF_INPUT=0 sam local start-api --hook-name terraform --warm-containers {{if eq .LAMBDA_RUN_EAGER "true"}}EAGER{{else}}LAZY{{end}} --debug --debug-port 3002 --port {{.LAMBDA_PORT}} --shutdown {{if eq .LAMBDA_NO_INFRA "true"}}--skip-prepare-infra{{end}}
+
+  clean-run:
+    deps: [clean-zip, clean-build]
+    cmds:
+      - rm -rf terraform/.aws-sam-iacs
+
+  rerun:
+    deps: [clean-run]
+    cmds:
+      - task: run
+
+  #############################################################################
+  ##### Lint
+  #############################################################################
+  lint:
+    cmds:
+      - golangci-lint -v run
+  
+  lint-fix:
+    cmds:
+      - golangci-lint -v run --fix
+
+  #############################################################################
+  ##### Build
+  #############################################################################
+  build-one-*:
+    internal: true
+    label: build-one-{{.FUNCTION_NAME}}
+    cmds:
+     - GOOS=linux GOARCH={{.GOARCH_AWS}} CGO_ENABLED=0 go build {{.GOARGS}} -o build/bin/functions/{{.FUNCTION_NAME}}/{{.BINARY_NAME}} cmd/functions/{{.FUNCTION_NAME}}/main.go
+  
+  # Update go dependencies, compile artefacts for each lambda
+  build:
+    vars:
+      FUNCS:
+        sh: find cmd/functions -maxdepth 1 -mindepth 1 -type d -exec basename {} \;
+    cmds:
+      - task: install
+      - task: enable_multiarch
+      - task: lint
+      - cmd: "{{.COLOR_BLUE}}"
+        silent: true
+      - cmd: echo "┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓"
+        silent: true
+      - cmd: echo "┃                                        ┃"
+        silent: true
+      - cmd: echo "┃ Build                                  ┃"
+        silent: true
+      - cmd: echo "┃                                        ┃"
+        silent: true
+      - cmd: echo "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛"
+        silent: true
+      - cmd: "{{.COLOR_RESET}}"
+        silent: true
+      - go mod tidy
+      - for: { var: FUNCS }
+        task: build-one-{{.ITEM}}
+        vars: 
+          FUNCTION_NAME: '{{.ITEM}}'
+  
+  clean-build:
+    cmds:
+      - rm -rf build/bin
+      - go clean -cache
+
+  rebuild:
+    cmds:
+      - task: clean-build
+      - task: build
+
+
+  #############################################################################
+  ##### Depedencies
+  #############################################################################
+  dep-upgrade:
+    cmds:
+      - go get -u ./...
+
+  dep-test:
+    cmds:
+      - go test all  
+
+  #############################################################################
+  ##### Zip
+  #############################################################################
+  zip-one-*:
+    internal: true
+    label: zip-one-{{.FUNCTION_NAME}} #enable checksum per task instance
+    silent: true
+    cmds:
+     - mkdir -p build/zip/functions/{{.FUNCTION_NAME}}
+     - zip -q -6 build/zip/functions/{{.FUNCTION_NAME}}/package.zip -j build/bin/functions/{{.FUNCTION_NAME}}/{{.BINARY_NAME}}
+     - echo -e "{{.FUNCTION_NAME}} zipped from $(du -h build/bin/functions/{{.FUNCTION_NAME}}/{{.BINARY_NAME}} | cut -f 1) to $(du -h build/zip/functions/{{.FUNCTION_NAME}}/package.zip | cut -f 1)"
+    sources:
+     - build/bin/functions/{{.FUNCTION_NAME}}/{{.BINARY_NAME}}
+    generates:
+     - build/zip/functions/{{.FUNCTION_NAME}}/package.zip
+    method: checksum
+
+  zip: 
+    vars:
+      FUNCS:
+        sh: find cmd/functions -maxdepth 1 -mindepth 1 -type d -exec basename {} \;
+    cmds:
+      - task: build
+      - cmd: "{{.COLOR_BLUE}}"
+        silent: true
+      - cmd: echo "┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓"
+        silent: true
+      - cmd: echo "┃                                        ┃"
+        silent: true
+      - cmd: echo "┃ Zip                                    ┃"
+        silent: true
+      - cmd: echo "┃                                        ┃"
+        silent: true
+      - cmd: echo "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛"
+        silent: true
+      - cmd: "{{.COLOR_RESET}}"
+        silent: true
+      - mkdir -p build/zip
+      - for: { var: FUNCS }
+        task: zip-one-{{.ITEM}}
+        vars: 
+          FUNCTION_NAME: '{{.ITEM}}'
+
+  clean-zip:
+    cmds:
+      - rm -rf build/zip
+
+  clean:
+    deps: [clean-build, clean-zip, clean-run, clean-test]
+
+
+  #############################################################################
+  ##### Deploy
+  #############################################################################
+
+  deploy:
+    dir: terraform
+    cmds:
+      - task: generate-lambdas-terraform
+      - task: zip
+      - cmd: "{{.COLOR_BLUE}}"
+        silent: true
+      - cmd: echo "┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓"
+        silent: true
+      - cmd: echo "┃                                        ┃"
+        silent: true
+      - cmd: echo "┃ Deploy                                 ┃"
+        silent: true
+      - cmd: echo "┃                                        ┃"
+        silent: true
+      - cmd: echo "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛"
+        silent: true
+      - cmd: "{{.COLOR_RESET}}"
+        silent: true
+      - terraform init
+      - terraform apply
+
+  destroy:
+    dir: terraform
+    cmds:
+      - cmd: "{{.COLOR_BLUE}}"
+        silent: true
+      - cmd: echo "┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓"
+        silent: true
+      - cmd: echo "┃                                        ┃"
+        silent: true
+      - cmd: echo "┃ Destroy                                ┃"
+        silent: true
+      - cmd: echo "┃                                        ┃"
+        silent: true
+      - cmd: echo "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛"
+        silent: true
+      - cmd: "{{.COLOR_RESET}}"
+        silent: true
+      - terraform init
+      - terraform destroy
+      - task: clean-terraform
+    
+  clean-terraform:
+    cmds:
+      - rm -rf terraform/.terraform
+
+  generate-lambdas-terraform: 
+    dir: terraform
+    cmds:
+      - |
+        rm -f lambdas.generated.tf
+        echo "################################################################################" >> lambdas.generated.tf
+        echo "##### Warning : file generated by Task before each build" >> lambdas.generated.tf
+        echo -e "################################################################################\n" >> lambdas.generated.tf
+        for dir in ../cmd/functions/*; do
+          last_dir=$(basename "$dir")
+          memory=$(jq .memory "$dir/config.json")
+          output=$(echo "$last_dir" | awk -F'-' -v memory="$memory" '{
+              method = $NF;  # Get the last element as method
+              path = $1;     # Start path with the first element
+              for (i = 2; i < NF; i++) {
+                  path = path "/" $i;  # Append each part to path with '/' as separator
+              }
+              printf "module \"%s\" { \\n", $last_dir;
+              printf "  source = \"./modules/lambda_http\" \\n";
+              printf "  environment_variables = local.env \\n";
+              printf "  region = var.region \\n";
+              printf "  gateway_id = module.gateway.id \\n";
+              printf "  gateway_execution_arn = module.gateway.execution_arn \\n";
+              printf "  gateway_invoke_url = module.gateway.invoke_url \\n";
+              printf "  method = \"%s\" \\n", method;
+              printf "  path = \"%s\" \\n", path;
+
+              printf "  memory_size = %s \\n", memory;
+              printf "} \\n";
+
+              printf "output \"%s\" { \\n", $last_dir;
+              printf "  value = module.%s \\n", $last_dir;
+              printf "} \\n";
+
+          }')
+          echo -e $output >> lambdas.generated.tf
+        done
+
+  #############################################################################
+  ##### Tests
+  #############################################################################
+  
+  test:
+    deps: [build]
+    cmds:
+     - go test -failfast -tags=exclude -race -v -cover ./...
+
+  test-report:
+    deps: [build]
+    cmds:
+     - rm -f coverprofile.out
+     - go test -failfast -tags=exclude -race -coverprofile=coverprofile.out ./...
+     - grep -vE "mock.go|main.go" coverprofile.out > coverprofile_filtered.out
+     - go tool cover -html="coverprofile_filtered.out"
+
+  test-func:
+    deps: [build]
+    cmds:
+     - rm -f coverprofile.out
+     - go test -failfast -tags=exclude -race -coverprofile=coverprofile.out ./...
+     - grep -vE "mock.go|main.go" coverprofile.out > coverprofile_filtered.out
+     - go tool cover -func="coverprofile_filtered.out"
+
+  test-percent:
+    deps: [build]
+    silent: true
+    cmds:
+     - rm -f coverprofile.out
+     - go test -failfast -tags=exclude -race -coverprofile=coverprofile.out ./...
+     - grep -vE "mock.go|main.go" coverprofile.out > coverprofile_filtered.out
+     - echo -e "\033[0;34mReal total code coverage is $(go tool cover -func="coverprofile_filtered.out" | grep "(statements)" | awk '{print $3}')\033[0m"
+
+  clean-test:
+    cmds:
+      - go clean -testcache
+
+  retest:
+    deps: [clean-test, clean-build]
+    cmds:
+      - task: test
+
+  #############################################################################
+  ##### Benchmark
+  #############################################################################
+
+  benchmark-fingerprinting:
+    internal: true
+    cmds:
+      - mkdir -p benchmarks
+      - lscpu | grep "Model name:" > benchmarks/cpu.txt
+      - sudo dmidecode -t baseboard > benchmarks/motherboard.txt
+      - sudo dmidecode -t bios > benchmarks/bios.txt
+      - sudo dmidecode -t memory > benchmarks/memory.txt
+      - cat benchmarks/* | sha1sum | cut -f1 -d " " > benchmarks/machine_fingerprint.sha1
+      - rm benchmarks/cpu.txt benchmarks/motherboard.txt benchmarks/bios.txt benchmarks/memory.txt
+
+  benchmark:
+    preconditions:
+    - sh: count=$(git status -s | wc -c) && exit $count
+      msg: "To benchmark, your git status must be clean"
+    cmds:
+    - task: benchmark-fingerprinting
+    - mkdir -p benchmarks/$(cat benchmarks/machine_fingerprint.sha1)
+    - go test ./... -run="^$" -bench=. -count={{.BENCHMARKS_COUNT}} > benchmarks/$(cat benchmarks/machine_fingerprint.sha1)/$(git rev-parse HEAD)
+
+  #############################################################################
+  ##### SQL
+  #############################################################################
+
+  sql-create:
+    status:
+    - docker ps -a --filter "name={{.SQL_CONTAINER_NAME}}" | grep -q {{.SQL_CONTAINER_NAME}}
+    cmds:
+    - docker create -e POSTGRES_USER={{.SQL_USER}} -e POSTGRES_PASSWORD={{.SQL_PASSWORD}} -p {{.SQL_PORT}}:5432 --name {{.SQL_CONTAINER_NAME}} postgres:{{.POSTGRES_VERSION}}
+
+  sql-start:
+    silent: true
+    deps: [sql-create]
+    cmds:
+    - "{{.COLOR_BLUE}}"
+    - echo "┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓"
+    - echo "┃                                        ┃"
+    - echo "┃ SQL                                    ┃"
+    - echo "┃                                        ┃"
+    - echo "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛"
+    - "{{.COLOR_RESET}}"
+    - docker start {{.SQL_CONTAINER_NAME}}
+    - docker ps -s --filter "name={{.SQL_CONTAINER_NAME}}" --format "json" | jq .
+        
+  sql-cli:
+    cmds:
+    - docker exec -it {{.SQL_CONTAINER_NAME}} psql -U {{.SQL_USER}} 
+
+  sql-sh:
+    cmds:
+    - docker exec -it {{.SQL_CONTAINER_NAME}} /bin/sh
+
+  sql-stop:
+    silent: true
+    preconditions:
+    - sh: docker ps -a --filter "name={{.SQL_CONTAINER_NAME}}" | grep -q {{.SQL_CONTAINER_NAME}}
+      msg: "Container \"{{.SQL_CONTAINER_NAME}}\" does not exist"
+    cmds: 
+    #- echo "Container size : " && docker ps -s --filter "name=lambadass_2024_postgres" --format "json" | jq .Size
+    - docker ps -s --filter "name={{.SQL_CONTAINER_NAME}}" --format "json" | jq .
+    - docker stop {{.SQL_CONTAINER_NAME}}
+
+  sql-clean:
+    preconditions:
+    - sh: docker ps -a --filter "name={{.SQL_CONTAINER_NAME}}" | grep -q {{.SQL_CONTAINER_NAME}}
+      msg: "Container \"{{.SQL_CONTAINER_NAME}}\" already removed"
+    prompt: You will lose all your data. Continue ?
+    cmds: 
+    - task: sql-stop
+    - docker rm {{.SQL_CONTAINER_NAME}}
+
+  sql-dump:
+    deps: [sql-start]
+    prompt: Any "{{.SQL_CONTAINER_NAME}}.sql" file will be overwritten. Continue ?
+    cmds: 
+    - docker exec -t {{.SQL_CONTAINER_NAME}} pg_dumpall -c -U {{.SQL_USER}} > {{.SQL_CONTAINER_NAME}}.sql
+
+  sql-restore:
+    deps: [sql-start]
+    prompt: All your data will be lost and replaced by what's inside "{{.SQL_CONTAINER_NAME}}.sql". Continue ?
+    cmds:
+    - cat {{.SQL_CONTAINER_NAME}}.sql | docker exec -i {{.SQL_CONTAINER_NAME}} psql -d postgres -U {{.SQL_USER}}

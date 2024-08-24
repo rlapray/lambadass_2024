@@ -1,0 +1,376 @@
+run:
+  timeout: 5m
+  tests: false
+
+issues:
+  exclude-rules:
+    # Exclude the mandatory aws lambda function prototype
+    - path: "cmd/functions/.*/main.go"
+      text: "hugeParam: request is heavy (.* bytes).* consider passing it by pointer"
+    - path: "cmd/functions/.*/handler.go"
+      text: "hugeParam: request is heavy (.* bytes).* consider passing it by pointer"
+
+linters:
+  enable:
+    - errcheck
+    - ineffassign
+    - unused
+    - asasalint
+    - asciicheck
+    - bidichk
+    - copyloopvar
+    #- cyclop revive already does that
+    - decorder
+    - depguard
+    - dogsled
+    - dupl
+    - dupword
+    - errchkjson
+    #- errorlint unecessary
+    - exhaustive
+    #- exhaustruct unecessary
+    #- forbidigo didn't understand
+    - funlen
+    - gci
+    #- ginkgolinter no use
+    #- gocognit already done by revive
+    - goconst
+    - gocritic
+    #- godot not really necessary
+    - godox
+    #- gofmt already running ?
+    - gofumpt
+    #- goheader not really necestestpackage
+    #-gomoddirectives not necessary right now
+    #-gomodguard depguard already do the same
+    - gosimple
+    - gosec
+    #- gosmopolitan about time, not used right now
+    - govet
+    #- grouper not really necessary
+    #- importas may be interesting later
+    - inamedparam
+    - interfacebloat
+    #- ireturn seems like a bad practice for me
+    #- lll similar to funlen
+    #- loggercheck does check zerolog
+    - maintidx
+    - misspell
+    - mnd
+    #- musttag useful but too limited
+    #- nestif already checking complexity
+    - nilnil
+    - nolintlint
+    #- nonamedreturns i'm okay with named returns
+    #- paralleltest may be useful, will look at it later
+    - perfsprint
+    - prealloc #It's not premature opt if done legibly. If the modification is really not legible, you may nolint the issue
+    - predeclared
+    #- promlinter not using prometheus
+    #- protogetter did not uderstand
+    - reassign
+    - revive
+    #-spancheck otel not used
+    - staticcheck
+    #- stylecheck already do in revive
+    - tagalign
+    - tagliatelle
+    - tenv
+    - testifylint
+    - testpackage
+    #- thelper not helping beside an ultra specific use case (lot of test helpers functions)
+    - usestdlibvars
+    - unconvert
+    #- unparam already done by various linters like revive (90% sure)
+    #- unused already done by various linters like revive (90% sure)
+    #- varnamelen no necessarily a good pratice
+    #- whitespace don't like the style pushed by this linter
+    #- wsl don't like the style pushed by this linter
+
+linters-settings:
+  depguard:
+    # Rules to apply.
+    #
+    # Variables:
+    # - File Variables
+    #   you can still use and exclamation mark ! in front of a variable to say not to use it.
+    #   Example !$test will match any file that is not a go test file.
+    #
+    #   `$all` - matches all go files
+    #   `$test` - matches all go test files
+    #
+    # - Package Variables
+    #
+    #  `$gostd` - matches all of go's standard library (Pulled from `GOROOT`)
+    #
+    # Default: Only allow $gostd in all files.
+    rules:
+      # Name of a rule.
+      main:
+        # Used to determine the package matching priority.
+        # There are three different modes: `original`, `strict`, and `lax`.
+        # Default: "original"
+        list-mode: lax
+        # List of file globs that will match this list of settings to compare against.
+        # Default: $all
+        files:
+          - $all
+        # List of allowed packages.
+        allow:
+          - $gostd
+          - github.com/lambadass-2024/backend
+  dogsled:
+    max-blank-identifiers: 2 # would have liked  value at 1 or 0 a,d something like "ignore-test": true...
+
+  funlen:
+    # Checks the number of lines in a function.
+    # If lower than 0, disable the check.
+    # Default: 60
+    lines: 40
+    # Checks the number of statements in a function.
+    # If lower than 0, disable the check.
+    # Default: 40
+    statements: 40
+    # Ignore comments when counting lines.
+    # Default false
+    ignore-comments: true
+
+  goconst:
+    # Minimal length of string constant.
+    # Default: 3
+    min-len: 2
+    # Minimum occurrences of constant string count to trigger issue.
+    # Default: 3
+    min-occurrences: 3
+    # Ignore test files.
+    # Default: false
+    ignore-tests: true
+    # Look for existing constants matching the values.
+    # Default: true
+    match-constant: false
+    # Search also for duplicated numbers.
+    # Default: false
+    numbers: true
+    # Minimum value, only works with goconst.numbers
+    # Default: 3
+    min: 2
+    # Maximum value, only works with goconst.numbers
+    # Default: 3
+    max: 2
+    # Ignore when constant is not used as function argument.
+    # Default: true
+    ignore-calls: false
+    # Exclude strings matching the given regular expression.
+    # Default: ""
+    ignore-strings: 'cause|duration|request|type|INTERNAL_MARSHALING_ERROR|query|Mock data not found|MOCK_DATA_NOT_FOUND|BAD_REQUEST'
+    
+  gocritic:
+     enable-all: true
+  
+  interfacebloat:
+    # The maximum number of methods allowed for an interface.
+    # Default: 10
+    max: 8
+
+  maintidx:
+    # Show functions with maintainability index lower than N.
+    # A high index indicates better maintainability (it's kind of the opposite of complexity).
+    # Default: 20
+    under: 40
+
+  misspell:
+    # Correct spellings using locale preferences for US or UK.
+    # Setting locale to US will correct the British spelling of 'colour' to 'color'.
+    # Default is to use a neutral variety of English.
+    locale: US
+    # Typos to ignore.
+    # Should be in lower case.
+    # Default: []
+    ignore-words:
+      - someword
+    # Extra word corrections.
+    # `typo` and `correction` should only contain letters.
+    # The words are case-insensitive.
+    # Default: []
+    extra-words:
+      - typo: "iff"
+        correction: "if"
+      - typo: "cancelation"
+        correction: "cancellation"
+    # Mode of the analysis:
+    # - default: checks all the file content.
+    # - restricted: checks only comments.
+    # Default: ""
+    mode: default
+
+  mnd:
+    # List of enabled checks, see https://github.com/tommy-muehle/go-mnd/#checks for description.
+    # Default: ["argument", "case", "condition", "operation", "return", "assign"]
+    checks:
+      - argument
+      - case
+      - condition
+      - operation
+      - return
+      - assign
+    # List of numbers to exclude from analysis.
+    # The numbers should be written as string.
+    # Values always ignored: "1", "1.0", "0" and "0.0"
+    # Default: []
+    ignored-numbers:
+      - '500'
+      - '422'
+      - '404'
+      - '400'
+      - '204'
+      - '200'
+    # List of file patterns to exclude from analysis.
+    # Values always ignored: `.+_test.go`
+    # Default: []
+    ignored-files:
+      - '.+_test.go'
+    # List of function patterns to exclude from analysis.
+    # Following functions are always ignored: `time.Date`,
+    # `strconv.FormatInt`, `strconv.FormatUint`, `strconv.FormatFloat`,
+    # `strconv.ParseInt`, `strconv.ParseUint`, `strconv.ParseFloat`.
+    # Default: []
+    ignored-functions:
+      - '^math\.'
+
+  nolintlint:
+    # Disable to ensure that all nolint directives actually have an effect.
+    # Default: false
+    allow-unused: false
+    # Exclude following linters from requiring an explanation.
+    # Default: []
+    allow-no-explanation: []
+    # Enable to require an explanation of nonzero length after each nolint directive.
+    # Default: false
+    require-explanation: true
+    # Enable to require nolint directives to mention the specific linter being suppressed.
+    # Default: false
+    require-specific: true
+
+  perfsprint:
+    # Optimizes even if it requires an int or uint type cast.
+    # Default: true
+    int-conversion: false
+    # Optimizes into `err.Error()` even if it is only equivalent for non-nil errors.
+    # Default: false
+    err-error: true
+    # Optimizes `fmt.Errorf`.
+    # Default: true
+    errorf: true
+    # Optimizes `fmt.Sprintf` with only one argument.
+    # Default: true
+    sprintf1: true
+    # Optimizes into strings concatenation.
+    # Default: true
+    strconcat: true
+
+  prealloc:
+    # IMPORTANT: we don't recommend using this linter before doing performance profiling.
+    # For most programs usage of prealloc will be a premature optimization.
+
+    # Report pre-allocation suggestions only on simple loops that have no returns/breaks/continues/gotos in them.
+    # Default: truetestpackageestions on range loops.
+    # Default: true
+    range-loops: true
+    # Report pre-allocation suggestions on for loops.
+    # Default: false
+    for-loops: true
+
+  predeclared:
+    # Comma-separated list of predeclared identifiers to not report on.
+    # Default: ""
+    ignore: ""
+    # Include method names and field names (i.e., qualified names) in checks.
+    # Default: false
+    q: true
+
+  revive:
+    # Maximum number of open files at the same time.
+    # See https://github.com/mgechev/revive#command-line-flags
+    # Defaults to unlimited.
+    max-open-files: 2048
+    # When set to false, ignores files with "GENERATED" header, similar to golint.
+    # See https://github.com/mgechev/revive#available-rules for details.
+    # Default: false
+    ignore-generated-header: true
+    # Sets the default severity.
+    # See https://github.com/mgechev/revive#configuration
+    # Default: warning
+    severity: warning
+    # Enable all available rules.
+    # Default: false
+    enable-all-rules: true
+    # Sets the default failure confidence.
+    # This means that linting errors with less than 0.8 confidence will be ignored.
+    # Default: 0.8
+    confidence: 0.8
+    rules:
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#cyclomatic
+      - name: cyclomatic # https://chatgpt.com/share/94bfa3de-7f74-4ad3-ab05-35414faecd2c
+        severity: warning
+        disabled: false
+        exclude: [""]
+        arguments: [12]
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#line-length-limit
+      - name: line-length-limit
+        severity: warning
+        disabled: false
+        exclude: [""]
+        arguments: [160]
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#add-constant
+      - name: add-constant
+        severity: warning
+        disabled: false
+        exclude: [""]
+        arguments:
+          - maxLitCount: "3"
+            allowStrs: '"","cause","duration","request","type","INTERNAL_MARSHALING_ERROR","query","Mock data not found"'
+            allowInts: "0,1,2,400,404,422,500,200,204"
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#comment-spacings
+      - name: comment-spacings
+        severity: warning
+        disabled: true
+        exclude: [""]
+        arguments:
+          - mypragma
+          - otherpragm
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#cognitive-complexity
+      - name: cognitive-complexity
+        severity: warning
+        disabled: false
+        exclude: [""]
+        arguments: [10]
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#dot-imports
+      - name: dot-imports
+        disabled: true
+        #arguments:
+        #  - allowedPackages:
+        #    - "github.com/lambadass-2024/backend/cmd/functions/pet-POST"
+        #exclude: ["github.com/lambadass-2024/backend/cmd/functions/pet-POST"]
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#confusing-naming
+      - name: confusing-naming
+        disabled: true # Different struct, different file, but same method name in the same package => trigger
+        exclude: [""]
+
+
+  staticcheck:
+    # SAxxxx checks in https://staticcheck.io/docs/configuration/options/#checks
+    # Default: ["*"]
+    checks: ["all"]
+
+  testifylint:
+    # Enable all checkers (https://github.com/Antonboom/testifylint#checkers).
+    # Default: false
+    enable-all: true
+
+  unconvert:
+    # Remove conversions that force intermediate rounding.
+    # Default: false
+    fast-math: true
+    # Be more conservative (experimental).
+    # Default: false
+    safe: false

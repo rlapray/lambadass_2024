@@ -1,0 +1,25 @@
+# Terraform
+terraform/.terraform
+terraform/.terraform.lock.hcl
+terraform/terraform.tfvars
+terraform/backend.tf
+terraform/lambdas.generated.tf
+
+# AWS SAM
+terraform/.aws-sam-iacs/*/**
+
+# Artefacts
+build/*/**
+coverprofile.out
+coverprofile_filtered.out
+#*.sql
+
+# Task
+.task/*/**
+
+# Benchmarks
+benchmarks/bios.txt
+benchmarks/cpu.txt
+benchmarks/machine_fingerprint.sha1
+benchmarks/memory.txt
+benchmarks/motherboard.txt
